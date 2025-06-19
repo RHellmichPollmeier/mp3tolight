@@ -1,8 +1,11 @@
+// components/Audio3DVisualizer.jsx
 import React, { useState, useRef } from 'react';
 import TabNavigation from './TabNavigation';
 import AudioControls from './AudioControls';
 import ParameterControls from './ParameterControls';
 import ThreeJSViewer from './ThreeJSViewer';
+import SpectrogramViewer from './SpectrogramViewer';
+import ShapeTextureControls from './ShapeTextureControls';
 import { useAudioAnalysis } from '../hooks/useAudioAnalysis';
 
 const Audio3DVisualizer = () => {
@@ -11,6 +14,12 @@ const Audio3DVisualizer = () => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [activeTab, setActiveTab] = useState('basic');
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Spectrogram specific state
+    const [selectedRegion, setSelectedRegion] = useState(null);
+    const [selectedShape, setSelectedShape] = useState('lightbulb');
+    const [mappingMode, setMappingMode] = useState('displacement');
+    const [spectrogramColormap, setSpectrogramColormap] = useState('viridis');
 
     // Audio Analysis Hook
     const {
@@ -40,7 +49,16 @@ const Audio3DVisualizer = () => {
         midWeight: 1.0,
         trebleWeight: 1.0,
         brightnessScale: 1.0,
-        tempoSpiralFactor: 1.0
+        tempoSpiralFactor: 1.0,
+
+        // Spectrogram Parameters
+        selectedShape: 'lightbulb',
+        mappingMode: 'displacement',
+        displacementScale: 0.5,
+        colorIntensity: 1.0,
+        normalScale: 1.0,
+        emissionIntensity: 2.0,
+        selectedRegion: null
     });
 
     // Available Tabs
@@ -50,6 +68,12 @@ const Audio3DVisualizer = () => {
             label: '3D Basic',
             icon: '🎵',
             description: 'Grundlegende Amplituden-Visualisierung'
+        },
+        {
+            id: 'spectrogram',
+            label: 'Spektrogramm',
+            icon: '📊',
+            description: 'Frequenz-Zeit-Analyse mit Form-Mapping'
         },
         {
             id: 'chroma',
@@ -66,7 +90,7 @@ const Audio3DVisualizer = () => {
         {
             id: 'frequency',
             label: 'Frequency Bands',
-            icon: '📊',
+            icon: '📈',
             description: 'Bass, Mitten, Höhen getrennt'
         },
         {
@@ -78,7 +102,7 @@ const Audio3DVisualizer = () => {
         {
             id: 'tempo',
             label: 'Tempo Analysis',
-            icon: '📈',
+            icon: '📉',
             description: 'BPM und Tempo-Variationen'
         }
     ];
@@ -128,9 +152,46 @@ const Audio3DVisualizer = () => {
         }
     };
 
+    // Handle Spectrogram Region Selection
+    const handleRegionSelect = (region) => {
+        setSelectedRegion(region);
+        setParams(prev => ({
+            ...prev,
+            selectedRegion: region
+        }));
+    };
+
+    // Handle Shape Change
+    const handleShapeChange = (shapeId) => {
+        setSelectedShape(shapeId);
+        setParams(prev => ({
+            ...prev,
+            selectedShape: shapeId
+        }));
+    };
+
+    // Handle Mapping Mode Change
+    const handleMappingChange = (mode) => {
+        setMappingMode(mode);
+        setParams(prev => ({
+            ...prev,
+            mappingMode: mode
+        }));
+    };
+
+    // Handle Texture Parameters Change
+    const handleTextureParamsChange = (newParams) => {
+        setParams(prev => ({
+            ...prev,
+            ...newParams
+        }));
+    };
+
     // Get Tab-specific Parameters
     const getTabParameters = () => {
         switch (activeTab) {
+            case 'spectrogram':
+                return []; // Handled by ShapeTextureControls
             case 'chroma':
                 return ['chromaIntensity'];
             case 'beats':
@@ -163,31 +224,52 @@ const Audio3DVisualizer = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-6">
                     {/* Controls */}
-                    <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 space-y-4">
+                    <div className="space-y-4">
 
                         {/* Audio Controls */}
-                        <AudioControls
-                            audioFile={audioFile}
-                            isPlaying={isPlaying}
-                            onFileUpload={handleFileUpload}
-                            onPlayToggle={setIsPlaying}
-                            analysisData={analysisData[activeTab]}
-                            meshRef={meshRef}
-                            activeTab={activeTab}
-                        />
+                        <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 space-y-4">
+                            <AudioControls
+                                audioFile={audioFile}
+                                isPlaying={isPlaying}
+                                onFileUpload={handleFileUpload}
+                                onPlayToggle={setIsPlaying}
+                                analysisData={analysisData[activeTab]}
+                                meshRef={meshRef}
+                                activeTab={activeTab}
+                            />
+                        </div>
 
-                        {/* Parameter Controls */}
-                        <ParameterControls
-                            params={params}
-                            onParamsChange={setParams}
-                            availableParams={getTabParameters()}
-                            activeTab={activeTab}
-                            tabs={tabs}
-                        />
+                        {/* Spectrogram Shape & Texture Controls */}
+                        {activeTab === 'spectrogram' && (
+                            <ShapeTextureControls
+                                selectedShape={selectedShape}
+                                selectedMapping={mappingMode}
+                                textureParams={params}
+                                onShapeChange={handleShapeChange}
+                                onMappingChange={handleMappingChange}
+                                onParamsChange={handleTextureParamsChange}
+                                hasSpectrogramData={!!analysisData.spectrogram}
+                            />
+                        )}
+
+                        {/* Standard Parameter Controls */}
+                        {activeTab !== 'spectrogram' && (
+                            <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 space-y-4">
+                                <ParameterControls
+                                    params={params}
+                                    onParamsChange={setParams}
+                                    availableParams={getTabParameters()}
+                                    activeTab={activeTab}
+                                    tabs={tabs}
+                                />
+                            </div>
+                        )}
                     </div>
 
-                    {/* 3D Viewer */}
-                    <div className="lg:col-span-2">
+                    {/* Main Viewer Area */}
+                    <div className="lg:col-span-2 space-y-6">
+
+                        {/* 3D Viewer */}
                         <ThreeJSViewer
                             analysisData={analysisData[activeTab]}
                             params={params}
@@ -198,6 +280,17 @@ const Audio3DVisualizer = () => {
                             tabs={tabs}
                             meshRef={meshRef}
                         />
+
+                        {/* Spectrogram 2D Viewer */}
+                        {activeTab === 'spectrogram' && analysisData.spectrogram && (
+                            <SpectrogramViewer
+                                spectrogramData={analysisData.spectrogram}
+                                width={800}
+                                height={300}
+                                colormap={spectrogramColormap}
+                                onRegionSelect={handleRegionSelect}
+                            />
+                        )}
                     </div>
                 </div>
             </div>
